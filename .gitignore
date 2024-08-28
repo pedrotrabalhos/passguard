@@ -1,0 +1,6 @@
+*.o
+*.out
+passguard.db
+example
+passguard
+obj
