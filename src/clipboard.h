@@ -1,6 +1,6 @@
 #ifndef CLIPBOARD_H
 #define CLIPBOARD_H
 
-void copy_to_clipboard(const char *text);
+void clipboard_copy(const char *text);
 
-#endif
+#endif // CLIPBOARD_H

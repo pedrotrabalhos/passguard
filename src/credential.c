@@ -1,122 +1,232 @@
+#include "credential.h"
+
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "credential.h"
-#include "password.h"
-#include <curses.h>
 
-#define FILENAME "credentials.csv"
-#define MAX_CREDENTIALS 100 // Make sure this is defined somewhere
+int credential_generate_id(FILE *file) {
+  int highest_id = 0;
+  char line[MAX_LINE_LENGTH];
 
-/*
- * Helper function to save all credentials to a CSV file.
- */
-void save_credentials_to_file(Credential *credentials, int count)
-{
-    FILE *file = fopen(FILENAME, "w");
-    if (!file)
-    {
-        perror("Unable to open file for writing");
-        return;
+  while (fgets(line, sizeof(line), file) != NULL) {
+    int current_id;
+
+    if (sscanf(line, "%d,", &current_id) == 1) {
+      if (current_id > highest_id) {
+        highest_id = current_id;
+      }
     }
+  }
 
-    for (int i = 0; i < count; i++)
-    {
-        encode_password(credentials[i].password);
-        fprintf(file, "%d,%s,%s\n", credentials[i].id, credentials[i].service, credentials[i].password);
-    }
+  // Get back to the beginning of the file
+  rewind(file);
+  return highest_id + 1;
+}
 
+int credential_create(char service[SERVICE_MAX_LENGTH],
+                      char password[PASSWORD_MAX_LENGTH]) {
+  FILE *file = fopen(FILENAME, "a+");
+
+  if (file == NULL) {
+    return ERROR_OPENING_FILE;
+  }
+
+  Credential new_credential;
+
+  new_credential.id = credential_generate_id(file);
+
+  strncpy(new_credential.service, service, SERVICE_MAX_LENGTH - 1);
+  new_credential.service[SERVICE_MAX_LENGTH - 1] = '\0';
+  strncpy(new_credential.password, password, PASSWORD_MAX_LENGTH - 1);
+  new_credential.password[PASSWORD_MAX_LENGTH - 1] = '\0';
+
+  fprintf(file, "%d,%s,%s\n", new_credential.id, new_credential.service,
+          new_credential.password);
+
+  fclose(file);
+  return 0;
+}
+
+int credential_destroy(int credential_id) {
+  FILE *file = fopen(FILENAME, "r");
+
+  if (file == NULL) {
+    return ERROR_OPENING_FILE;
+  }
+
+  FILE *temp_file = fopen("temp.csv", "w");
+
+  if (temp_file == NULL) {
     fclose(file);
+    return ERROR_OPENING_FILE;
+  }
+
+  char line[MAX_LINE_LENGTH];
+  bool found = false;
+
+  while (fgets(line, sizeof(line), file) != NULL) {
+    int current_id;
+
+    if (sscanf(line, "%d,", &current_id) == 1) {
+      if (current_id == credential_id) {
+        found = true;
+        continue;
+      }
+    }
+    fprintf(temp_file, "%s", line);
+  }
+
+  fclose(file);
+  fclose(temp_file);
+
+  if (!found) {
+    remove("temp.csv");
+    return 0;
+  }
+
+  if (remove(FILENAME) != 0 || rename("temp.csv", FILENAME) != 0) {
+    return ERROR_OPENING_FILE;
+  }
+
+  return 0;
 }
 
-/*
- * Helper function to load all credentials from a CSV file.
- */
-int load_credentials_from_file(Credential credentials[MAX_CREDENTIALS])
-{
-    FILE *file = fopen(FILENAME, "r");
-    if (!file)
-    {
-        perror("Unable to open file for reading");
-        return 0;
-    }
+int credential_update_password(int credential_id,
+                               char password[PASSWORD_MAX_LENGTH]) {
+  FILE *file = fopen(FILENAME, "r");
 
-    int count = 0;
-    while (fscanf(file, "%d,%31[^,],%31[^\n]", &credentials[count].id, credentials[count].service, credentials[count].password) == 3)
-    {
-        decode_password(credentials[count].password);
-        count++;
-        if (count >= MAX_CREDENTIALS)
-            break;
-    }
+  if (file == NULL) {
+    return ERROR_OPENING_FILE;
+  }
 
+  FILE *temp_file = fopen("temp.csv", "w");
+
+  if (temp_file == NULL) {
     fclose(file);
-    return count;
+    return ERROR_OPENING_FILE;
+  }
+
+  char line[MAX_LINE_LENGTH];
+  bool found = false;
+
+  while (fgets(line, sizeof(line), file) != NULL) {
+    int current_id;
+    char current_service[SERVICE_MAX_LENGTH];
+    char current_password[PASSWORD_MAX_LENGTH];
+
+    if (sscanf(line, "%d,%49[^,],%31[^\n]", &current_id, current_service,
+               current_password) == 3) {
+      if (current_id == credential_id) {
+        fprintf(temp_file, "%d,%s,%s\n", current_id, current_service, password);
+        found = true;
+      } else {
+        fprintf(temp_file, "%s", line);
+      }
+    }
+  }
+
+  fclose(file);
+  fclose(temp_file);
+
+  if (!found) {
+    remove("temp.csv");
+    return 0;
+  }
+
+  if (remove(FILENAME) != 0 || rename("temp.csv", FILENAME) != 0) {
+    return ERROR_OPENING_FILE;
+  }
+
+  return 0;
 }
 
-void create_credential(Credential *credential)
-{
-    Credential credentials[MAX_CREDENTIALS];
-    int count = load_credentials_from_file(credentials); // Pass the array, not the pointer to it
+int credential_update_service(int credential_id,
+                              const char new_service[SERVICE_MAX_LENGTH]) {
+  FILE *file = fopen(FILENAME, "r");
+  if (file == NULL) {
+    return ERROR_OPENING_FILE;
+  }
 
-    credential->id = (count > 0) ? credentials[count - 1].id + 1 : 1;
-    credentials[count] = *credential;
-    count++;
+  FILE *temp_file = fopen("temp.csv", "w");
+  if (temp_file == NULL) {
+    fclose(file);
+    return ERROR_OPENING_FILE;
+  }
 
-    save_credentials_to_file(credentials, count);
+  char line[MAX_LINE_LENGTH];
+  bool found = false;
+
+  while (fgets(line, sizeof(line), file) != NULL) {
+    int current_id;
+    char current_service[SERVICE_MAX_LENGTH];
+    char current_password[PASSWORD_MAX_LENGTH];
+
+    if (sscanf(line, "%d,%49[^,],%31[^\n]", &current_id, current_service,
+               current_password) == 3) {
+      if (current_id == credential_id) {
+        fprintf(temp_file, "%d,%s,%s\n", current_id, new_service,
+                current_password);
+        found = true;
+      } else {
+        fprintf(temp_file, "%s", line);
+      }
+    }
+  }
+
+  fclose(file);
+  fclose(temp_file);
+
+  if (!found) {
+    remove("temp.csv");
+    return ERROR_CREDENTIAL_NOT_FOUND;
+  }
+
+  if (remove(FILENAME) != 0 || rename("temp.csv", FILENAME) != 0) {
+    return ERROR_OPENING_FILE;
+  }
+
+  return 0;
 }
 
-void update_credential(Credential *credential)
-{
-    Credential credentials[MAX_CREDENTIALS];
-    int count = load_credentials_from_file(credentials);
+int credential_list(Credential *destination[MAX_CREDENTIALS]) {
+  FILE *file = fopen(FILENAME, "r");
+  if (file == NULL) {
+    return ERROR_OPENING_FILE;
+  }
 
-    for (int i = 0; i < count; i++)
-    {
-        if (credentials[i].id == credential->id)
-        {
-            strcpy(credentials[i].service, credential->service);
-            strcpy(credentials[i].password, credential->password);
-            save_credentials_to_file(credentials, count);
-            return;
-        }
+  int count = 0;
+  char line[MAX_LINE_LENGTH];
+
+  while (fgets(line, sizeof(line), file) != NULL && count < MAX_CREDENTIALS) {
+    destination[count] = (Credential *)malloc(sizeof(Credential));
+
+    if (destination[count] == NULL) {
+      fclose(file);
+      return ERROR_ALLOCATING_MEMORY;
     }
+
+    Credential *current_cred = destination[count];
+
+    if (sscanf(line, "%d,%49[^,],%31[^\n]", &current_cred->id,
+               current_cred->service, current_cred->password) == 3) {
+      count++;
+    }
+  }
+
+  fclose(file);
+  return count;
 }
 
-void delete_credential(int id)
-{
-    Credential credentials[MAX_CREDENTIALS];
-    int count = load_credentials_from_file(credentials);
-
-    int index = -1;
-    for (int i = 0; i < count; i++)
-    {
-        if (credentials[i].id == id)
-        {
-            index = i;
-            break;
-        }
+bool credential_repeated_service(char *service,
+                                 Credential *credentials[MAX_CREDENTIALS]) {
+  for (int i = 0; i < MAX_CREDENTIALS; i++) {
+    if (credentials[i] == NULL) {
+      break;
     }
 
-    if (index == -1)
-    {
-        return;
+    if (strcmp(credentials[i]->service, service) == 0) {
+      return true;
     }
-
-    for (int i = index; i < count - 1; i++)
-    {
-        credentials[i] = credentials[i + 1];
-    }
-
-    save_credentials_to_file(credentials, count - 1);
-}
-
-int list_credentials(Credential credentials[MAX_CREDENTIALS])
-{
-    if (credentials == NULL)
-    {
-        return -1;
-    }
-    int count = load_credentials_from_file(credentials);
-    return count;
+  }
 }

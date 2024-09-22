@@ -1,12 +1,13 @@
 #ifndef PASSWORD_H
 #define PASSWORD_H
 
-#define MAX_PASSWORD_LENGTH 32 
+#include <stdlib.h>
+#include <string.h>
 
-void encode_password(char raw_password[MAX_PASSWORD_LENGTH]);
+void password_encrypt(char *raw_password, char *destination, const char *key);
 
-void decode_password(char password_hash[MAX_PASSWORD_LENGTH]);
+void password_decrypt(char *encrypted, char *destination, const char *key);
 
-void generate_password(int password_length, char destination[]);
+void password_generate(char *destination);
 
-#endif
+#endif // PASSWORD_H

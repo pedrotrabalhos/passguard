@@ -1,222 +1,254 @@
-#include <ncurses.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdbool.h>
-#include "credential.h"
 #include "clipboard.h"
-#include "password.h"
+#include "credential.h"
+#include "ui.h"
+#include <stdbool.h>
+#include <string.h>
 
-int main()
-{
-  // Allocates memory and initializes ncurses
-  initscr();
-  cbreak();
-  raw();
-  noecho();
+#define ACCESS_OPTION 0
+#define CREATE_OPTION 1
+#define UPDATE_OPTION 2
+#define DELETE_OPTION 3
+#define EXIT_OPTION 4
 
-  // Constants for the window dimensions
-  const int HEIGHT = 14;
-  const int WIDTH = 40;
-  const int start_y = 0;
-  const int start_x = 0;
+void read_service(Credential *existing_credentials[], int count,
+                  char *destination);
+void read_password(char *destination);
 
-  // Pointer to a main window object from ncurses, with the specified dimensions
-  WINDOW *main_win = newwin(HEIGHT, WIDTH, start_y, start_x);
-  refresh();
+int main(void) {
+  ui_init();
 
-  box(main_win, 0, 0);
-  mvwprintw(main_win, 2, 3, "Passguard - Gerenciador de chaves");
-  wrefresh(main_win);
+  while (true) {
+    clear();
+    const char *options[] = {"Acessar senhas", "Cadastrar nova senha",
+                             "Atualizar senha", "Deletar senha", "Sair"};
+    int option = ui_menu("Bem-vindo ao PassGuard", options, 5);
 
-  char *choices[] = {"Adicionar chave", "Acessar chaves", "Sair"};
+    if (option == EXIT_OPTION) {
+      ui_end();
+      break;
+    }
 
-  keypad(main_win, true);
+    Credential *credentials[MAX_CREDENTIALS];
+    int count = credential_list(credentials);
 
-  int key_pressed;
-  int selected = 0;
+    switch (option) {
+      char service[SERVICE_MAX_LENGTH];
+      char password[PASSWORD_MAX_LENGTH];
 
-  int const CREATE_OPTION = 0;
-  int const ACCESS_OPTION = 1;
-  int const EXIT_OPTION = 2;
+    case ACCESS_OPTION: {
+      ui_clear();
 
-  int const OPTIONS_NUMBER = 3;
-
-  bool exit_program = false;
-
-  while (exit_program == false)
-  {
-    // Display the main menu
-    while (true)
-    {
-      for (int i = 0; i < OPTIONS_NUMBER; i++)
-      {
-        if (i == selected)
-        {
-          wattron(main_win, A_REVERSE);
-        }
-        mvwprintw(main_win, i + 4, 2, choices[i]);
-        wattroff(main_win, A_REVERSE);
-      }
-
-      key_pressed = wgetch(main_win);
-
-      if (key_pressed == KEY_UP && selected > 0)
-      {
-        selected--;
-      }
-      else if (key_pressed == KEY_DOWN && selected < 2)
-      {
-        selected++;
-      }
-      if (key_pressed == KEY_ENTER || key_pressed == 10)
-      {
+      if (count == ERROR_OPENING_FILE) {
+        ui_display("Erro ao abrir arquivo\n");
+        ui_wait_for_key();
         break;
       }
-    }
 
-    // Handle the selected option
-    if (selected == CREATE_OPTION)
-    {
-      WINDOW *create_win = newwin(HEIGHT, WIDTH, start_y, start_x);
-      box(create_win, 0, 0);
-      mvwprintw(create_win, 2, 12, "Adicionar chave");
-      mvwprintw(create_win, 4, 2, "Serviço (website/app):");
-      mvwprintw(create_win, 5, 2, "Senha:");
-
-      wattron(create_win, A_REVERSE);
-      mvwprintw(create_win, 7, 2, "Deixe a senha vazia caso deseje");
-      mvwprintw(create_win, 8, 2, "gerar uma senha aleatória");
-      wattroff(create_win, A_REVERSE);
-
-      char service[SERVICE_MAX_LENGTH];
-      char password[MAX_PASSWORD_LENGTH];
-
-      mvwgetnstr(create_win, 4, 24, service, SERVICE_MAX_LENGTH);
-      mvwgetnstr(create_win, 5, 9, password, MAX_PASSWORD_LENGTH);
-
-      if (strlen(password) == 0)
-      {
-        generate_password(24, password);
+      if (count == 0) {
+        ui_display("Nenhuma senha cadastrada\n");
+        ui_wait_for_key();
+        break;
       }
 
-      Credential credential;
-      strcpy(credential.service, service);
-      strcpy(credential.password, password);
+      char *options[count];
 
-      create_credential(&credential);
+      for (int i = 0; i < count; i++) {
+        options[i] = credentials[i]->service;
+      }
 
-      mvwprintw(create_win, HEIGHT - 4, 2, "Senha registrada com sucesso");
-      wrefresh(create_win);
+      int selected = ui_menu("Suas senhas", (const char **)options, count);
 
-      getch();
-      delwin(create_win);
-    }
-    else if (selected == ACCESS_OPTION)
-    {
-      WINDOW *access_window = newwin(HEIGHT, WIDTH, start_y, start_x);
-      Credential credentials[MAX_CREDENTIALS]; // Adjusted for local storage
-      int count = list_credentials(credentials);
+      Credential *selected_credential = credentials[selected];
 
-      box(access_window, 0, 0);
-      mvwprintw(access_window, 2, 13, "Acessar chave");
-      wrefresh(access_window);
-
-      int selected = 0;
-      int key_pressed;
-
-      int const COPY_KEY = (int)'c';
-      int const EDIT_KEY = (int)'e';
-      int const DELETE_KEY = (int)'d';
-
-      while (true)
-      {
-        for (int i = 0; i < count; i++)
-        {
-          if (i == selected)
-          {
-            wattron(access_window, A_REVERSE);
-          }
-          mvwprintw(access_window, i + 4, 2, credentials[i].service);
-          wattroff(access_window, A_REVERSE);
+      while (true) {
+        ui_clear();
+        ui_display("Serviço: %s\n", selected_credential->service);
+        ui_display("Senha: ");
+        for (int i = 0; i < strlen(selected_credential->password); i++) {
+          ui_display("*");
         }
-        wattron(access_window, A_REVERSE);
-        mvwprintw(access_window, HEIGHT - 2, 2, "'c' copiar");
-        mvwprintw(access_window, HEIGHT - 2, 14, "'e' editar");
-        mvwprintw(access_window, HEIGHT - 2, 26, "'d' deletar");
-        wattroff(access_window, A_REVERSE);
+        ui_display("\n\n");
 
-        wrefresh(access_window);
+        ui_display("Pressione S para copiar a senha ou ESC para voltar\n\n");
 
-        key_pressed = wgetch(main_win);
+        int key = ui_getch();
 
-        if (key_pressed == KEY_UP && selected > 0)
-        {
-          selected--;
-        }
-        else if (key_pressed == KEY_DOWN && selected < count - 1)
-        {
-          selected++;
-        }
-        else if (key_pressed == COPY_KEY || key_pressed == EDIT_KEY || key_pressed == DELETE_KEY)
-        {
+        if (key == (int)'s') {
+          clipboard_copy(selected_credential->password);
+          ui_display("Senha copiada para a área de transferência.\n");
+          ui_wait_for_key();
+        } else if (key == 27) {
           break;
         }
       }
 
-      int action_message_height = HEIGHT - 4;
-
-      if (key_pressed == COPY_KEY)
-      {
-        copy_to_clipboard(credentials[selected].password);
-        mvwprintw(access_window, action_message_height, 2, "Senha copiada para o clipboard.");
-        wrefresh(access_window);
-      }
-      else if (key_pressed == EDIT_KEY)
-      {
-        WINDOW *edit_win = newwin(HEIGHT, WIDTH, start_y, start_x);
-        box(edit_win, 0, 0);
-
-        mvwprintw(edit_win, 2, 13, "Editar chave");
-        mvwprintw(edit_win, 4, 2, "Serviço (website/app): %s", credentials[selected].service);
-        mvwprintw(edit_win, 5, 2, "Senha: ");
-
-        char password[MAX_PASSWORD_LENGTH];
-        mvwgetnstr(edit_win, 5, 9, password, MAX_PASSWORD_LENGTH - 1);
-
-        strcpy(credentials[selected].password, password);
-
-        update_credential(&credentials[selected]);
-
-        mvwprintw(edit_win, action_message_height, 2, "Senha atualizada com sucesso");
-        wrefresh(edit_win);
-
-        getch();
-        delwin(edit_win);
-      }
-      else if (key_pressed == DELETE_KEY)
-      {
-        delete_credential(credentials[selected].id); // Use the correct id for deletion
-        mvwprintw(access_window, action_message_height, 2, "Chave deletada com sucesso.");
-        wrefresh(access_window);
-      }
-
-      getch();
-      delwin(access_window);
+      break;
     }
-    else if (selected == EXIT_OPTION)
-    {
-      exit_program = true;
+    case CREATE_OPTION: {
+      ui_clear();
+
+      // Verify if the credentials limit has been reached
+      if (count >= 5) {
+        ui_display("Limite de senhas atingido\n");
+        ui_wait_for_key();
+        break;
+      }
+
+      ui_display("Cadastrar nova senha\n");
+
+      read_service(credentials, count, service);
+      read_password(password);
+
+      credential_create(service, password);
+
+      ui_display("\nSenha cadastrada com sucesso!\n");
+      ui_refresh();
+      break;
     }
 
-    // Clear the main window to redisplay the menu
-    wclear(main_win);
-    box(main_win, 0, 0);
-    mvwprintw(main_win, 2, 3, "Passguard - Gerenciador de chaves");
-    wrefresh(main_win);
+    case UPDATE_OPTION: {
+      ui_clear();
+
+      // Verify if at least one credential exists
+      if (count == 0) {
+        ui_display("Você não possui nenhuma senha ainda.\n");
+        ui_wait_for_key();
+        break;
+      }
+
+      Credential *credentials[MAX_CREDENTIALS];
+      int count = credential_list(credentials);
+
+      if (count == ERROR_OPENING_FILE) {
+        ui_display("Erro ao abrir arquivo\n");
+        ui_wait_for_key();
+        break;
+      }
+
+      char *options[count];
+
+      for (int i = 0; i < count; i++) {
+        options[i] = credentials[i]->service;
+      }
+
+      int selected = ui_menu("Atualizar senha", (const char **)options, count);
+
+      Credential *selected_credential = credentials[selected];
+
+      bool will_update_service =
+          ui_confirm("Você deseja atualizar também o nome do serviço? (S/N)\n");
+
+      if (will_update_service == true) {
+        read_service(credentials, count, service);
+        int response =
+            credential_update_service(selected_credential->id, service);
+
+        if (response < 0) {
+          ui_display("Erro ao atualizar serviço\n");
+          ui_wait_for_key();
+          break;
+        }
+      }
+
+      ui_display("Atualizando senha de %s\n", selected_credential->service);
+      ui_input_sensitive("Insira sua nova senha\n", password,
+                         PASSWORD_MAX_LENGTH);
+
+      credential_update_password(selected_credential->id, password);
+
+      ui_display("\nSenha atualizada com sucesso!\n");
+      ui_wait_for_key();
+      break;
+    }
+
+    case DELETE_OPTION: {
+      ui_clear();
+
+      // Verify if at least one credential exists
+      if (count == 0) {
+        ui_display("Você não possui nenhuma senha ainda.\n");
+        ui_wait_for_key();
+        break;
+      }
+
+      Credential *credentials[MAX_CREDENTIALS];
+      int count = credential_list(credentials);
+
+      if (count == ERROR_OPENING_FILE) {
+        ui_display("Erro ao abrir arquivo\n");
+        ui_wait_for_key();
+        break;
+      }
+
+      char *options[count];
+
+      for (int i = 0; i < count; i++) {
+        options[i] = credentials[i]->service;
+      }
+
+      int selected = ui_menu("Deletar senha", (const char **)options, count);
+
+      Credential *selected_credential = credentials[selected];
+
+      bool confirmation =
+          ui_confirm("Tem certeza que deseja deletar essa senha? (S/N)\n");
+
+      if (confirmation == true) {
+        credential_destroy(selected_credential->id);
+        ui_display("Senha deletada com sucesso!\n");
+        ui_wait_for_key();
+      }
+
+      break;
+    }
+    }
+  }
+  ui_end();
+}
+
+void read_service(Credential *existing_credentials[], int count,
+                  char *destination) {
+  char service[SERVICE_MAX_LENGTH];
+
+  while (true) {
+    ui_input("Qual serviço dessa senha?\n", service, SERVICE_MAX_LENGTH);
+
+    if (strlen(service) == 0) {
+      ui_display("O serviço não pode ser vazio\n");
+      ui_wait_for_key();
+      continue;
+    }
+
+    bool service_exists = false;
+    for (int i = 0; i < count; i++) {
+      if (strcmp(existing_credentials[i]->service, service) == 0) {
+        ui_display("Esse serviço já existe\n");
+        ui_wait_for_key();
+        service_exists = true;
+        break;
+      }
+    }
+
+    if (!service_exists) {
+      strcpy(destination, service);
+      return; // Exit the function when a valid, non-existing service is entered
+    }
+  }
+}
+void read_password(char *destination) {
+  char password[PASSWORD_MAX_LENGTH];
+
+  while (true) {
+    ui_input_sensitive("Insira sua senha\n", password, PASSWORD_MAX_LENGTH);
+
+    if (strlen(password) == 0) {
+      ui_display("A senha não pode ser vazia\n");
+      ui_wait_for_key();
+      continue;
+    }
+
+    break;
   }
 
-  // Deallocates memory and ends ncurses
-  endwin();
-  return 0;
+  strcpy(destination, password);
 }

@@ -1,48 +1,28 @@
 #include "password.h"
-#include <string.h>
 #include <stdlib.h>
-#include <time.h>
-#include <stdio.h>
+#include <string.h>
 
-#define PASSWORD_KEY 0XAE
+void password_encrypt(char *raw_password, char *destination, const char *key) {
+  size_t password_len = strlen(raw_password);
+  size_t key_len = strlen(key);
 
-void encode_password(char raw_password[MAX_PASSWORD_LENGTH])
-{
-  int i, password_length = strlen(raw_password);
-
-  for (i = 0; i < password_length; i++)
-  {
-    raw_password[i] = raw_password[i] - PASSWORD_KEY;
+  for (size_t i = 0; i < password_len; i++) {
+    destination[i] = raw_password[i] ^ key[i % key_len];
   }
 }
 
-void decode_password(char password_hash[MAX_PASSWORD_LENGTH])
-{
-  int i, password_length = strlen(password_hash);
-
-  for (i = 0; i < password_length; i++)
-  {
-    password_hash[i] = password_hash[i] + PASSWORD_KEY;
-  }
+void password_decrypt(char *encrypted, char *destination, const char *key) {
+  password_encrypt(encrypted, destination, key);
 }
 
-void generate_password(int password_length, char destination[])
-{
-  char *characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+void password_generate(char *destination) {
+  const char charset[] =
+      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  size_t charset_len = strlen(charset);
 
-  if (password_length >= MAX_PASSWORD_LENGTH)
-  {
-    fprintf(stderr, "Password length exceeds maximum allowed length.\n");
-    return;
+  destination = malloc(16 * sizeof(char));
+
+  for (size_t i = 0; i < 16; i++) {
+    destination[i] = charset[rand() % charset_len];
   }
-
-  srand(time(NULL));
-
-  for (int i = 0; i < password_length; i++)
-  {
-    int random = rand() % strlen(characters);
-    destination[i] = characters[random];
-  }
-
-  destination[password_length] = '\0';
 }
