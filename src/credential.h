@@ -3,7 +3,7 @@
 
 #include <stdio.h>
 
-#define FILENAME "credentials.csv"
+#define FILENAME "credentials.bin"
 #define MAX_CREDENTIALS 5
 
 #define ERROR_OPENING_FILE -1
@@ -20,7 +20,7 @@ typedef struct Credential {
   char password[PASSWORD_MAX_LENGTH];
 } Credential;
 
-int credential_generate_id(FILE *file);
+int credential_generate_id();
 
 int credential_create(char service[SERVICE_MAX_LENGTH],
                       char password[PASSWORD_MAX_LENGTH]);
@@ -34,5 +34,7 @@ int credential_update_service(int credential_id,
                               const char new_service[SERVICE_MAX_LENGTH]);
 
 int credential_list(Credential *destination[MAX_CREDENTIALS]);
+
+int credential_extract_plain();
 
 #endif // CREDENTIAL_H

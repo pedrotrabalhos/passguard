@@ -2,6 +2,11 @@
 #include <ncurses.h>
 #include <stdbool.h>
 
+/*
+Now using stdscr instead of a specific window, remove the border
+but we can add things to the screen more easily
+*/
+
 void ui_init() {
   initscr();
   cbreak();
@@ -40,6 +45,7 @@ int ui_menu(const char *title, const char *options[], int count) {
   int highlight = 0;
 
   while (true) {
+    ui_display("Passguard - Gerenciador de senhas\n\n");
     ui_display(title);
     ui_display("\n");
     ui_display("\n");

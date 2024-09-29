@@ -1,5 +1,6 @@
 #include "clipboard.h"
 #include "credential.h"
+#include "password.h"
 #include "ui.h"
 #include <stdbool.h>
 #include <string.h>
@@ -8,7 +9,8 @@
 #define CREATE_OPTION 1
 #define UPDATE_OPTION 2
 #define DELETE_OPTION 3
-#define EXIT_OPTION 4
+#define EXTRACT_OTION 4
+#define EXIT_OPTION 5
 
 void read_service(Credential *existing_credentials[], int count,
                   char *destination);
@@ -19,9 +21,11 @@ int main(void) {
 
   while (true) {
     clear();
-    const char *options[] = {"Acessar senhas", "Cadastrar nova senha",
-                             "Atualizar senha", "Deletar senha", "Sair"};
-    int option = ui_menu("Bem-vindo ao PassGuard", options, 5);
+    const char *options[] = {
+        "Acessar senhas", "Cadastrar nova senha",        "Atualizar senha",
+        "Deletar senha",  "Extrair senhas para arquivo", "Sair"};
+
+    int option = ui_menu("O que deseja fazer", options, 6);
 
     if (option == EXIT_OPTION) {
       ui_end();
@@ -37,7 +41,6 @@ int main(void) {
 
     case ACCESS_OPTION: {
       ui_clear();
-
       if (count == ERROR_OPENING_FILE) {
         ui_display("Erro ao abrir arquivo\n");
         ui_wait_for_key();
@@ -97,11 +100,20 @@ int main(void) {
       ui_display("Cadastrar nova senha\n");
 
       read_service(credentials, count, service);
-      read_password(password);
+
+      bool should_generate_random =
+          ui_confirm("Deseja gerar uma senha aleatória? (S/N)\n");
+
+      if (should_generate_random == true) {
+        password_generate(password);
+      } else {
+        read_password(password);
+      }
 
       credential_create(service, password);
 
       ui_display("\nSenha cadastrada com sucesso!\n");
+      ui_wait_for_key();
       ui_refresh();
       break;
     }
@@ -130,7 +142,6 @@ int main(void) {
       for (int i = 0; i < count; i++) {
         options[i] = credentials[i]->service;
       }
-
       int selected = ui_menu("Atualizar senha", (const char **)options, count);
 
       Credential *selected_credential = credentials[selected];
@@ -200,6 +211,21 @@ int main(void) {
       }
 
       break;
+    }
+
+    case EXTRACT_OTION: {
+      ui_clear();
+
+      // Verify if at least one credential exists
+      if (count == 0) {
+        ui_display("Você não possui nenhuma senha ainda.\n");
+        ui_wait_for_key();
+        break;
+      }
+
+      credential_extract_plain();
+      ui_display("Senhas extraídas para um arquivo com sucesso!\n");
+      ui_wait_for_key();
     }
     }
   }

@@ -23,7 +23,7 @@ sudo apt install xclip
 Para compilar o projeto manualmente, basta executar o comando `gcc` com os seguintes argumentos na raiz do projeto.
 
 ```bash
-gcc -o passguard src/main.c src/password.c src/clipboard.c src/credential.c -lncurses
+gcc -o passguard src/main.c src/password.c src/clipboard.c src/credential.c src/ui.c -lncurses
 ```
 
 ## Execução
